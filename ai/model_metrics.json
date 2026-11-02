@@ -1,0 +1,241 @@
+{
+  "timestamp": "2026-10-27T12:36:43.744010+00:00",
+  "model_version": "v1.2-rf-ensemble",
+  "total_samples": 672,
+  "train_samples": 504,
+  "test_samples": 168,
+  "accuracy": 1.0,
+  "precision": 1.0,
+  "recall": 1.0,
+  "f1_score": 1.0,
+  "confusion_matrix": {
+    "labels": [
+      "Extension",
+      "Flexion",
+      "Stationary",
+      "Walking"
+    ],
+    "matrix": [
+      [
+        32,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        31,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        74,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        31
+      ]
+    ]
+  },
+  "classification_report": {
+    "Extension": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 32.0
+    },
+    "Flexion": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 31.0
+    },
+    "Stationary": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 74.0
+    },
+    "Walking": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 31.0
+    },
+    "accuracy": 1.0,
+    "macro avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 168.0
+    },
+    "weighted avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 168.0
+    }
+  },
+  "feature_names": [
+    "angle_delta",
+    "angle_rate_max",
+    "angle_rate_mean",
+    "fsr_adc_max",
+    "fsr_adc_mean",
+    "fsr_adc_min",
+    "fsr_adc_ptp",
+    "fsr_adc_rms",
+    "fsr_adc_std",
+    "knee_angle_max",
+    "knee_angle_mean",
+    "knee_angle_min",
+    "knee_angle_ptp",
+    "knee_angle_rms",
+    "knee_angle_std",
+    "lower_acc_mag_mean",
+    "lower_acc_mag_std",
+    "lower_ax_max",
+    "lower_ax_mean",
+    "lower_ax_min",
+    "lower_ax_ptp",
+    "lower_ax_rms",
+    "lower_ax_std",
+    "lower_ay_max",
+    "lower_ay_mean",
+    "lower_ay_min",
+    "lower_ay_ptp",
+    "lower_ay_rms",
+    "lower_ay_std",
+    "lower_az_max",
+    "lower_az_mean",
+    "lower_az_min",
+    "lower_az_ptp",
+    "lower_az_rms",
+    "lower_az_std",
+    "lower_gx_max",
+    "lower_gx_mean",
+    "lower_gx_min",
+    "lower_gx_ptp",
+    "lower_gx_rms",
+    "lower_gx_std",
+    "lower_gy_max",
+    "lower_gy_mean",
+    "lower_gy_min",
+    "lower_gy_ptp",
+    "lower_gy_rms",
+    "lower_gy_std",
+    "lower_gz_max",
+    "lower_gz_mean",
+    "lower_gz_min",
+    "lower_gz_ptp",
+    "lower_gz_rms",
+    "lower_gz_std",
+    "thigh_acc_mag_mean",
+    "thigh_acc_mag_std",
+    "thigh_ax_max",
+    "thigh_ax_mean",
+    "thigh_ax_min",
+    "thigh_ax_ptp",
+    "thigh_ax_rms",
+    "thigh_ax_std",
+    "thigh_ay_max",
+    "thigh_ay_mean",
+    "thigh_ay_min",
+    "thigh_ay_ptp",
+    "thigh_ay_rms",
+    "thigh_ay_std",
+    "thigh_az_max",
+    "thigh_az_mean",
+    "thigh_az_min",
+    "thigh_az_ptp",
+    "thigh_az_rms",
+    "thigh_az_std",
+    "thigh_gx_max",
+    "thigh_gx_mean",
+    "thigh_gx_min",
+    "thigh_gx_ptp",
+    "thigh_gx_rms",
+    "thigh_gx_std",
+    "thigh_gy_max",
+    "thigh_gy_mean",
+    "thigh_gy_min",
+    "thigh_gy_ptp",
+    "thigh_gy_rms",
+    "thigh_gy_std",
+    "thigh_gz_max",
+    "thigh_gz_mean",
+    "thigh_gz_min",
+    "thigh_gz_ptp",
+    "thigh_gz_rms",
+    "thigh_gz_std",
+    "total_gyro_variance"
+  ],
+  "feature_importances": [
+    {
+      "feature": "thigh_gx_mean",
+      "importance": 0.0414
+    },
+    {
+      "feature": "lower_gz_mean",
+      "importance": 0.0409
+    },
+    {
+      "feature": "thigh_az_rms",
+      "importance": 0.0401
+    },
+    {
+      "feature": "thigh_gy_max",
+      "importance": 0.0397
+    },
+    {
+      "feature": "thigh_gz_mean",
+      "importance": 0.0394
+    },
+    {
+      "feature": "lower_gx_mean",
+      "importance": 0.0368
+    },
+    {
+      "feature": "lower_gy_mean",
+      "importance": 0.034
+    },
+    {
+      "feature": "lower_ax_mean",
+      "importance": 0.0332
+    },
+    {
+      "feature": "lower_gz_min",
+      "importance": 0.0301
+    },
+    {
+      "feature": "thigh_gy_rms",
+      "importance": 0.03
+    },
+    {
+      "feature": "fsr_adc_rms",
+      "importance": 0.0295
+    },
+    {
+      "feature": "lower_gx_rms",
+      "importance": 0.0262
+    },
+    {
+      "feature": "lower_gx_std",
+      "importance": 0.0242
+    },
+    {
+      "feature": "lower_az_mean",
+      "importance": 0.0238
+    },
+    {
+      "feature": "thigh_gz_ptp",
+      "importance": 0.0235
+    }
+  ],
+  "disclaimer": "Academic & Research prototype model only. Not certified for diagnostic or clinical decision making."
+}

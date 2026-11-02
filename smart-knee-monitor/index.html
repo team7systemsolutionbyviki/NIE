@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="SMART KNEE MONITOR — AI & AR. External smart knee kinematic and kinetic monitoring web application deployed statically on GitHub Pages with SQLite WASM, Web Bluetooth API, Three.js 3D/AR, and browser AI movement classification.">
+  <title>SMART KNEE MONITOR — AI & AR</title>
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+
+  <!-- Core Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- External Pinned Libraries (Zero server required, runs statically on GitHub Pages) -->
+  <!-- 1. SQLite WASM via sql.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+  <!-- 2. Chart.js for real-time telemetry graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- 3. Three.js for 3D Knee Kinematics -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- 4. Three.js OrbitControls -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="header-top-row">
+        <div class="brand-section">
+          <div class="brand-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M12 3v6l3 3"></path>
+              <circle cx="12" cy="12" r="2" fill="currentColor"></circle>
+            </svg>
+          </div>
+          <div>
+            <h1 class="brand-title">SMART KNEE MONITOR</h1>
+            <div class="brand-tagline">AI &bull; AR &bull; Web Bluetooth &bull; SQLite WASM</div>
+          </div>
+        </div>
+
+        <!-- BLE Controls (Top right on mobile/desktop) -->
+        <div class="header-ble-group">
+          <div id="ble-status-pill" class="status-pill status-disconnected">DISCONNECTED</div>
+          <button id="btn-ble-connect" class="btn btn-sm btn-outline">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6.5 6.5l11 11L12 23V1l5.5 5.5-11 11"></path></svg>
+            <span class="btn-text">Connect ESP32</span>
+          </button>
+          <button id="btn-ble-disconnect" class="btn btn-sm btn-outline text-danger" style="display: none;">
+            Disconnect
+          </button>
+        </div>
+      </div>
+
+      <!-- Control Bar: Session & Simulation -->
+      <div class="header-controls">
+        <!-- Session Status & Start/Stop -->
+        <div class="session-control-cluster">
+          <div class="session-status-box session-indicator" id="session-indicator">
+            <div class="recording-dot"></div>
+            <div class="session-info-text">
+              <span class="session-label">Session <strong id="val-session-id">None</strong></span>
+              <span id="val-session-timer" class="session-timer-text">00:00:00</span>
+            </div>
+          </div>
+
+          <div class="session-btn-wrap">
+            <button id="btn-session-start" class="btn btn-sm btn-primary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+              <span>Start</span>
+            </button>
+            <button id="btn-session-pause" class="btn btn-sm btn-outline" style="display: none;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+              <span>Pause</span>
+            </button>
+            <button id="btn-session-stop" class="btn btn-sm btn-danger" style="display: none;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg>
+              <span>Stop</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Simulation Mode Toggle -->
+        <div class="session-status-box sim-box" title="Toggle simulation mode to test all features without physical ESP32">
+          <label class="sim-toggle-label">
+            <input type="checkbox" id="checkbox-simulate">
+            <span>Simulate</span>
+          </label>
+          <select id="select-sim-mode" class="form-control sim-select">
+            <option value="walking">Walking</option>
+            <option value="flexion_extension">Flex/Ext</option>
+            <option value="stationary">Stationary</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Sub-Navigation Tabs -->
+  <nav class="app-nav">
+    <div class="nav-container">
+      <button class="nav-tab active" data-target="pane-dashboard">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+        Live Dashboard
+      </button>
+      <button class="nav-tab" data-target="pane-3d">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+        3D Kinematics & AR
+      </button>
+      <button class="nav-tab" data-target="pane-calibration">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+        Sensor Calibration
+      </button>
+      <button class="nav-tab" data-target="pane-history">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        Session History
+      </button>
+      <button class="nav-tab" data-target="pane-circuit">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+        Circuit Wiring
+      </button>
+      <button class="nav-tab" data-target="pane-storage">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+        SQLite WASM Storage
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Content Areas -->
+  <main class="app-content">
+
+    <!-- BLE Warning Banner (if unsupported or insecure context) -->
+    <div id="ble-support-banner" class="alert-banner" style="display: none;"></div>
+
+    <!-- Clinical Disclaimer -->
+    <div class="medical-disclaimer">
+      <strong>Clinical Research Prototype Notice:</strong>
+      This web application calculates estimated anatomical knee flexion/extension angles from external wearable IMUs and surface temperature sensors. It is an experimental engineering tool and is NOT certified as a medical diagnostic device. It does not replace physical goniometry or diagnose prosthetic failure, loosening, or infection.
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- TAB 1: LIVE DASHBOARD                                    -->
+    <!-- ======================================================== -->
+    <section id="pane-dashboard" class="tab-pane active">
+      <div class="dashboard-grid">
+
+        <!-- HERO CARD: Knee Angle -->
+        <div class="card hero-card col-4">
+          <div class="card-header">
+            <span class="card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              Estimated Knee Flexion
+            </span>
+            <span id="badge-calibration-status" class="badge badge-muted">Uncalibrated</span>
+          </div>
+
+          <div class="hero-angle-display">
+            <span id="val-knee-angle" class="hero-angle-val">0.0</span>
+            <span class="hero-angle-unit">°</span>
+          </div>
+
+          <div class="progress-bar-container">
+            <div id="bar-knee-angle" class="progress-bar-fill" style="width: 0%;"></div>
+          </div>
+          <div class="range-labels">
+            <span>0° (Full Extension)</span>
+            <span>60° (Gait)</span>
+            <span>140° (Deep Bend)</span>
+          </div>
+        </div>
+
+        <!-- AI CLASSIFICATION CARD -->
+        <div class="card col-4">
+          <div class="card-header">
+            <span class="card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"></path><path d="M12 6v6l4 2"></path></svg>
+              AI Movement Analysis
+            </span>
+            <span id="badge-ai-state" class="badge badge-success">Stationary</span>
+          </div>
+
+          <div style="text-align: center; margin: 18px 0;">
+            <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted);">Current Activity State</div>
+            <div id="val-ai-class" style="font-size: 32px; font-weight: 800; color: #fff; margin-top: 4px;">Stationary</div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+              Confidence: <strong id="val-ai-confidence" class="text-emerald">95%</strong>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); border-top: 1px solid var(--border-subtle); padding-top: 10px;">
+            <span>Model: v1.2-rf-ensemble</span>
+            <span>Sliding Window: 1.0s</span>
+          </div>
+        </div>
+
+        <!-- SENSOR STATUS & TELEMETRY SOURCE -->
+        <div class="card col-4">
+          <div class="card-header">
+            <span class="card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+              Hardware Link Status
+            </span>
+            <span id="badge-sensor-source" class="badge badge-muted">No Stream</span>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+            <div style="display: flex; justify-content: space-between; font-size: 13px;">
+              <span class="text-muted">Target BLE Device:</span>
+              <strong id="ble-device-name">None</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px;">
+              <span class="text-muted">Last Packet Received:</span>
+              <span id="val-last-packet" style="font-family: var(--font-mono);">--</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px;">
+              <span class="text-muted">SQLite WASM Engine:</span>
+              <span id="badge-db-status" class="badge badge-success">Initializing</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- THIGH MPU6050 CARD -->
+        <div class="card col-6">
+          <div class="card-header">
+            <span class="card-title">Thigh Segment IMU (MPU-6050 @ 0x68)</span>
+            <span class="badge badge-info">Femoral Node</span>
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">Linear Acceleration (g)</div>
+          <div class="telemetry-subgrid">
+            <div class="telemetry-cell"><div class="telemetry-label">Acc X</div><div id="val-thigh-ax" class="telemetry-val">0.00</div></div>
+            <div class="telemetry-cell"><div class="telemetry-label">Acc Y</div><div id="val-thigh-ay" class="telemetry-val">0.00</div></div>
+            <div class="telemetry-cell"><div class="telemetry-label">Acc Z</div><div id="val-thigh-az" class="telemetry-val">0.00</div></div>
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); margin: 10px 0 6px 0;">Angular Velocity (deg/s)</div>
+          <div class="telemetry-subgrid">
+            <div class="telemetry-cell"><div class="telemetry-label">Gyr X</div><div id="val-thigh-gx" class="telemetry-val">0.0</div></div>
+            <div class="telemetry-cell"><div class="telemetry-label">Gyr Y</div><div id="val-thigh-gy" class="telemetry-val">0.0</div></div>
+            <div class="telemetry-cell"><div class="telemetry-label">Gyr Z</div><div id="val-thigh-gz" class="telemetry-val">0.0</div></div>
+          </div>
+        </div>
+
+        <!-- LOWER LEG MPU6050 CARD -->
+        <div class="card col-6">
+          <div class="card-header">
+            <span class="card-title">Lower-Leg IMU (MPU-6050 @ 0x69)</span>
+            <span class="badge badge-info">Tibial Node</span>
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">Linear Acceleration (g)</div>
+          <div class="telemetry-subgrid">
+            <div class="telemetry-cell"><div class="telemetry-label">Acc X</div><div id="val-lower-ax" class="telemetry-val">0.00</div></div>
+            <div class="telemetry-cell"><div class="telemetry-label">Acc Y</div><div id="val-lower-ay" class="telemetry-val">0.00</div></div>
+            <div class="telemetry-cell"><div class="telemetry-label">Acc Z</div><div id="val-lower-az" class="telemetry-val">0.00</div></div>
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); margin: 10px 0 6px 0;">Angular Velocity (deg/s)</div>
+          <div class="telemetry-subgrid">
+            <div class="telemetry-cell"><div class="telemetry-label">Gyr X</div><div id="val-lower-gx" class="telemetry-val">0.0</div></div>
+            <div class="telemetry-cell"><div class="telemetry-label">Gyr Y</div><div id="val-lower-gy" class="telemetry-val">0.0</div></div>
+            <div class="telemetry-cell"><div class="telemetry-label">Gyr Z</div><div id="val-lower-gz" class="telemetry-val">0.0</div></div>
+          </div>
+        </div>
+
+        <!-- FSR PRESSURE & TEMPERATURE ROW -->
+        <div class="card col-6">
+          <div class="card-header">
+            <span class="card-title">FSR Force / Patellar Tendon Load</span>
+            <span id="val-fsr-pct" class="badge badge-success">0%</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: baseline; margin: 12px 0;">
+            <span class="text-muted">Raw ADC (12-bit, 0 - 4095):</span>
+            <strong id="val-fsr-adc" style="font-family: var(--font-mono); font-size: 24px;">0</strong>
+          </div>
+          <div class="progress-bar-container">
+            <div id="bar-fsr-pressure" class="progress-bar-fill" style="width: 0%; background: linear-gradient(90deg, var(--emerald), var(--cyan));"></div>
+          </div>
+          <div class="range-labels">
+            <span>Low (Swing Phase)</span>
+            <span>Moderate</span>
+            <span>Peak (Heel Strike / Deep Flexion)</span>
+          </div>
+        </div>
+
+        <div class="card col-6">
+          <div class="card-header">
+            <span class="card-title">Temperature Telemetry</span>
+            <button id="btn-open-body-temp" class="btn btn-sm btn-outline">
+              + Clinical Temp
+            </button>
+          </div>
+          <div style="display: flex; justify-content: space-around; align-items: center; padding: 12px 0;">
+            <div style="text-align: center;">
+              <span class="telemetry-label">Skin Surface (DS18B20)</span>
+              <div id="val-surface-temp" style="font-family: var(--font-mono); font-size: 28px; font-weight: 700; color: var(--amber);">
+                32.5°C
+              </div>
+            </div>
+            <div style="width: 1px; height: 50px; background: var(--border-subtle);"></div>
+            <div style="text-align: center;">
+              <span class="telemetry-label">Clinical Core (Manual)</span>
+              <div style="font-family: var(--font-mono); font-size: 28px; font-weight: 700; color: #fff;">
+                36.8°C
+              </div>
+            </div>
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); text-align: center;">
+            Surface temperature is monitored continuously; clinical thermometer inputs are logged separately.
+          </div>
+        </div>
+
+        <!-- REAL-TIME CHARTS -->
+        <div class="card col-4">
+          <div class="card-header">
+            <span class="card-title">Knee Angle (° vs Time)</span>
+          </div>
+          <div class="chart-container-wrap">
+            <canvas id="chart-angle"></canvas>
+          </div>
+        </div>
+
+        <div class="card col-4">
+          <div class="card-header">
+            <span class="card-title">Surface Skin Temp (°C)</span>
+          </div>
+          <div class="chart-container-wrap">
+            <canvas id="chart-temperature"></canvas>
+          </div>
+        </div>
+
+        <div class="card col-4">
+          <div class="card-header">
+            <span class="card-title">FSR Joint Load (%)</span>
+          </div>
+          <div class="chart-container-wrap">
+            <canvas id="chart-fsr"></canvas>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- TAB 2: 3D KINEMATICS & WEBXR AR                          -->
+    <!-- ======================================================== -->
+    <section id="pane-3d" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+            Interactive Anatomical Knee Joint Model
+          </span>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-3d-demo" class="btn btn-sm btn-outline">Start 3D Demo Loop</button>
+            <button id="btn-enter-ar" class="btn btn-sm btn-primary" style="display: none;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3H3v2"></path><path d="M19 3h2v2"></path><path d="M5 21H3v-2"></path><path d="M19 21h2v-2"></path></svg>
+              View in AR (WebXR)
+            </button>
+          </div>
+        </div>
+
+        <!-- 3D Viewport -->
+        <div class="viewer-3d-wrap">
+          <div id="knee-3d-canvas"></div>
+          <div class="viewer-overlay">
+            <div class="viewer-hud">
+              <div><strong>Femoral-Tibial Angle:</strong> Live Stream</div>
+              <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Drag to rotate &bull; Pinch/Scroll to zoom &bull; Right click to pan</div>
+            </div>
+            <div class="viewer-hud" style="text-align: right;">
+              <span class="badge badge-info">Anatomical Hinge Pivot</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; font-size: 12px; color: var(--text-secondary);">
+          <div>
+            <strong>Components:</strong> Femoral Shaft &amp; Condyles (Top) &bull; Tibia &amp; Fibula (Lower) &bull; Patella (Gliding Kneecap) &bull; Cyan Hinge Pin (Transverse Axis)
+          </div>
+          <div>WebXR AR auto-detected on supported Android/Chrome or iOS WebXR browsers.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- TAB 3: SENSOR CALIBRATION                                -->
+    <!-- ======================================================== -->
+    <section id="pane-calibration" class="tab-pane">
+      <div class="card" style="max-width: 800px; margin: 0 auto;">
+        <div class="card-header">
+          <span class="card-title">Dual IMU Neutral Anatomical Calibration</span>
+          <span class="badge badge-accent">Kinematic Alignment</span>
+        </div>
+
+        <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 20px;">
+          To ensure accurate flexion/extension measurement independent of exact physical strap placement, perform an anatomical zeroing calibration. Stand upright with your leg straight and hold still for 1.5 seconds.
+        </p>
+
+        <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 20px; text-align: center; margin-bottom: 24px;">
+          <div id="calib-status-text" style="font-size: 16px; font-weight: 700; margin-bottom: 12px;">
+            Ready to calibrate
+          </div>
+          <div class="progress-bar-container" style="height: 10px; margin-bottom: 12px;">
+            <div id="calib-progress-bar" class="progress-bar-fill" style="width: 0%;"></div>
+          </div>
+          <div id="calib-offsets-display" style="font-family: var(--font-mono); font-size: 13px; color: var(--cyan);">
+            Offsets: Thigh: 0.0° | Lower: 0.0° | Angle: 0.0°
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 12px; justify-content: center;">
+          <button id="btn-calib-start" class="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            Calibrate Neutral Stance (0°)
+          </button>
+          <button id="btn-calib-reset" class="btn btn-outline">
+            Reset to Factory Defaults
+          </button>
+        </div>
+
+        <div class="medical-disclaimer" style="margin-top: 24px;">
+          <strong>Biomechanical Note:</strong> Raw accelerometer pitch estimates assume gravity alignment in static posture. In motion, gyroscope integration and complementary filtering suppress centripetal accelerations. All computed angles are experimental estimates.
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- TAB 4: SESSION HISTORY                                   -->
+    <!-- ======================================================== -->
+    <section id="pane-history" class="tab-pane">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="font-size: 18px; font-weight: 700;">Recorded Monitoring Sessions</h2>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-sm btn-outline" onclick="window.kneeHistory.loadHistory()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            Refresh List
+          </button>
+        </div>
+      </div>
+
+      <!-- Container where history session cards will be injected -->
+      <div id="history-sessions-list"></div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- TAB: CIRCUIT & HARDWARE WIRING                           -->
+    <!-- ======================================================== -->
+    <section id="pane-circuit" class="tab-pane">
+      <div class="card" style="max-width: 950px; margin: 0 auto;">
+        <div class="card-header">
+          <span class="card-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+            ESP32 DevKit V1 Wearable Hardware Interfacing &amp; Wiring Diagram
+          </span>
+          <span class="badge badge-info">Hardware Pinout</span>
+        </div>
+
+        <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 20px;">
+          This circuit interfaces two MPU-6050 6-DOF IMUs over a shared I2C bus (distinguished by the AD0 address pin), one FSR force-sensitive resistor via a voltage divider to an analog ADC pin, and one DS18B20 digital temperature probe via Dallas OneWire.
+        </p>
+
+        <!-- Visual Circuit ASCII Block Diagram -->
+        <div style="background: #080c14; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 16px; margin-bottom: 24px; font-family: var(--font-mono); font-size: 12px; line-height: 1.4; color: #a5f3fc; overflow-x: auto; white-space: pre;">
+================================================================================================
+                    ESP32 DEVKIT V1 SMART KNEE SCHEMATIC CONNECTION
+================================================================================================
+
+             +--------------------------------------------------------+
+             |                 ESP32 DEVKIT V1 (30-pin)               |
+             |                                                        |
+             |  [3V3]   [GND]   [GPIO 21]   [GPIO 22]   [GPIO 34]   [GPIO 4] 
+             +----+-------+---------+-----------+-----------+----------+------+
+                  |       |         |           |           |          |
+                  |       |    (I2C SDA)   (I2C SCL)    (ADC IN)   (1-WIRE)
+                  |       |         |           |           |          |
+   +--------------+       |         |           |           |          |
+   |   +------------------+         |           |           |          |
+   |   |                            |           |           |          |
+   |   |   +------------------------+           |           |          |
+   |   |   |       +----------------------------+           |          |
+   |   |   |       |                                        |          |
+   |   |   |       |   [SENSOR 1: THIGH MPU-6050 (0x68)]    |          |
+   |   +---|---|---|--- GND                                 |          |
+   +-------|---|---|--- VCC (3.3V)                          |          |
+   |   +---|---|---|--- AD0  --> Connected to GND (0x68)    |          |
+   |   |   +---|---|--- SDA                                 |          |
+   |   |       +---|--- SCL                                 |          |
+   |   |           |                                        |          |
+   |   |           |   [SENSOR 2: LOWER-LEG MPU-6050 (0x69)]|          |
+   |   +---|---|---|--- GND                                 |          |
+   +-------|---|---|--- VCC (3.3V)                          |          |
+   +-------|---|---|--- AD0  --> Connected to 3.3V (0x69)   |          |
+   |   +---|---|---|--- SDA                                 |          |
+   |   |       +---|--- SCL                                 |          |
+   |   |                                                    |          |
+   |   |   [SENSOR 3: FSR PRESSURE SENSOR]                  |          |
+   +---|---------------- Pin 1 (3.3V)                       |          |
+   |   |                 Pin 2 -----------------------------+          |
+   |   |                    |                                          |
+   |   |                    +--[ 10k Ohm Resistor ]--+                 |
+   |   |                                             |                 |
+   |   +---------------------------------------------+                 |
+   |                                                                   |
+   |   [SENSOR 4: DS18B20 DIGITAL TEMPERATURE]                         |
+   +-------------------- VDD (Red, 3.3V)                               |
+   |                    |                                              |
+   |                    +--[ 4.7k Ohm Pull-Up ]--+                     |
+   |                                             |                     |
+   |                    DATA (Yellow/White) -----+---------------------+
+   |                                                                   
+   +-------------------- GND (Black, Ground)                           
+================================================================================================</div>
+
+        <!-- Pinout Table -->
+        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 12px; color: #fff;">Complete Pin Mapping Table</h3>
+        <div style="overflow-x: auto; margin-bottom: 24px;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+              <tr style="background: rgba(255,255,255,0.05); text-align: left;">
+                <th style="padding: 10px; border: 1px solid var(--border-subtle);">Sensor</th>
+                <th style="padding: 10px; border: 1px solid var(--border-subtle);">Sensor Pin</th>
+                <th style="padding: 10px; border: 1px solid var(--border-subtle);">ESP32 Pin</th>
+                <th style="padding: 10px; border: 1px solid var(--border-subtle);">Wire Color (Suggested)</th>
+                <th style="padding: 10px; border: 1px solid var(--border-subtle);">Function / Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td rowspan="5" style="padding: 10px; border: 1px solid var(--border-subtle); font-weight: 600; color: var(--cyan);">Thigh MPU-6050<br><span style="font-size: 11px; color: var(--text-muted);">(Address 0x68)</span></td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">VCC</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle); font-family: var(--font-mono);">3V3</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Red</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">3.3V Power</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">GND</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle); font-family: var(--font-mono);">GND</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Black</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Common Ground</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">SDA</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle); font-family: var(--font-mono);">GPIO 21</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Blue</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">I2C Data (Shared)</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">SCL</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle); font-family: var(--font-mono);">GPIO 22</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Yellow</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">I2C Clock (Shared)</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">AD0</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle); font-family: var(--font-mono);">GND</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Black</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle); font-weight: 600; color: var(--emerald);">Tied to GND &rarr; I2C Address 0x68</td>
+              </tr>
+
+              <tr style="background: rgba(255,255,255,0.02);">
+                <td rowspan="5" style="padding: 10px; border: 1px solid var(--border-subtle); font-weight: 600; color: #818cf8;">Lower-Leg MPU-6050<br><span style="font-size: 11px; color: var(--text-muted);">(Address 0x69)</span></td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">VCC</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle); font-family: var(--font-mono);">3V3</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Red</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">3.3V Power</td>
+              </tr>
+              <tr style="background: rgba(255,255,255,0.02);">
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">GND</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle); font-family: var(--font-mono);">GND</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Black</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Common Ground</td>
+              </tr>
+              <tr style="background: rgba(255,255,255,0.02);">
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">SDA</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle); font-family: var(--font-mono);">GPIO 21</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Blue</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">I2C Data (Shared with Thigh IMU)</td>
+              </tr>
+              <tr style="background: rgba(255,255,255,0.02);">
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">SCL</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle); font-family: var(--font-mono);">GPIO 22</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Yellow</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">I2C Clock (Shared with Thigh IMU)</td>
+              </tr>
+              <tr style="background: rgba(255,255,255,0.02);">
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">AD0</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle); font-family: var(--font-mono);">3V3</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Red</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle); font-weight: 600; color: #a78bfa;">Tied to 3.3V &rarr; I2C Address 0x69</td>
+              </tr>
+
+              <tr>
+                <td rowspan="2" style="padding: 10px; border: 1px solid var(--border-subtle); font-weight: 600; color: var(--emerald);">FSR Force Sensor</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Pin 1</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle); font-family: var(--font-mono);">3V3</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Red</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">3.3V Power</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Pin 2</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle); font-family: var(--font-mono);">GPIO 34</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Green</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Analog Input + <strong>10k&Omega; Pull-Down</strong> to GND</td>
+              </tr>
+
+              <tr style="background: rgba(255,255,255,0.02);">
+                <td rowspan="3" style="padding: 10px; border: 1px solid var(--border-subtle); font-weight: 600; color: var(--amber);">DS18B20 Temp Probe</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">VDD (Red wire)</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle); font-family: var(--font-mono);">3V3</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Red</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">3.3V Power</td>
+              </tr>
+              <tr style="background: rgba(255,255,255,0.02);">
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">GND (Black wire)</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle); font-family: var(--font-mono);">GND</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Black</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Ground</td>
+              </tr>
+              <tr style="background: rgba(255,255,255,0.02);">
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">DATA (Yellow/White)</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle); font-family: var(--font-mono);">GPIO 4</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">Yellow</td>
+                <td style="padding: 10px; border: 1px solid var(--border-subtle);">OneWire Data + <strong>4.7k&Omega; Pull-Up</strong> to 3.3V</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Assembly & Troubleshooting Tips -->
+        <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 18px;">
+          <h4 style="font-size: 14px; margin-bottom: 8px; color: var(--cyan);">Key Hardware Assembly Details:</h4>
+          <ul style="padding-left: 20px; line-height: 1.7; color: var(--text-secondary); font-size: 13px;">
+            <li><strong>How Dual IMUs Share Pins:</strong> Both MPU-6050 sensors connect to the exact same I2C lines (<span style="color:#fff;">GPIO 21 SDA</span> and <span style="color:#fff;">GPIO 22 SCL</span>). Setting <span style="color:#34d399;">AD0 &rarr; GND</span> sets the Thigh sensor to address <code style="color:var(--cyan);">0x68</code>, while setting <span style="color:#a78bfa;">AD0 &rarr; 3.3V</span> switches the Lower-leg sensor to <code style="color:var(--cyan);">0x69</code>.</li>
+            <li><strong>FSR Resistor (10k&Omega;):</strong> Forms a voltage divider so the ESP32 ADC on GPIO 34 reads between 0V (no touch) up to ~3.3V (firm pressure).</li>
+            <li><strong>DS18B20 Resistor (4.7k&Omega;):</strong> Connected between 3.3V and the OneWire Data line (GPIO 4) to ensure proper digital bus communication.</li>
+            <li><strong>Firmware Sketch:</strong> The matching Arduino sketch is in <a href="file:///c:/Users/VIKI/Desktop/NEE%20ALA/firmware/esp32_knee_ble.ino" style="color:var(--cyan);">firmware/esp32_knee_ble.ino</a>.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- TAB 5: DATABASE & STORAGE                                -->
+    <!-- ======================================================== -->
+    <section id="pane-storage" class="tab-pane">
+      <div class="card" style="max-width: 850px; margin: 0 auto;">
+        <div class="card-header">
+          <span class="card-title">SQLite WASM Browser Database Architecture</span>
+          <span class="badge badge-success">Local Persistence Active</span>
+        </div>
+
+        <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 16px;">
+          This application compiles the official <strong>SQLite relational engine to WebAssembly (WASM)</strong> and executes it entirely client-side. All session metadata, 6-DOF sensor packets, body temperatures, calibration profiles, and AI predictions are written to SQLite tables and mirrored to the browser's <strong>IndexedDB binary storage</strong>.
+        </p>
+
+        <div class="alert-banner">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          Browser persistent storage belongs strictly to this website origin (GitHub Pages URL) and current browser profile. Clearing your browser cache or switching devices will not automatically sync records. Use the backup tools below to save copies.
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 24px 0;">
+          <!-- Binary Export -->
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 18px;">
+            <h4 style="font-size: 14px; margin-bottom: 6px;">SQLite .db Binary Backup</h4>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">Download a standard SQLite binary file (<code>knee_monitor.db</code>) readable by DB Browser for SQLite, Python, or DBeaver.</p>
+            <button id="btn-export-db" class="btn btn-sm btn-primary" style="width: 100%;">
+              Download SQLite .db
+            </button>
+          </div>
+
+          <!-- Restore .db -->
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 18px;">
+            <h4 style="font-size: 14px; margin-bottom: 6px;">Restore Database from .db</h4>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">Upload an existing <code>knee_monitor.db</code> SQLite file to restore all tables, sessions, and telemetry.</p>
+            <label class="btn btn-sm btn-outline" style="width: 100%; cursor: pointer;">
+              Upload &amp; Restore .db
+              <input type="file" id="input-restore-db" accept=".db,.sqlite,.sqlite3" style="display: none;">
+            </label>
+          </div>
+
+          <!-- JSON Export -->
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 18px;">
+            <h4 style="font-size: 14px; margin-bottom: 6px;">JSON Data Export</h4>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">Export an interoperable formatted JSON file of all monitoring sessions and readings.</p>
+            <button id="btn-export-json" class="btn btn-sm btn-outline" style="width: 100%;">
+              Export JSON Backup
+            </button>
+          </div>
+        </div>
+
+        <div style="border-top: 1px solid var(--border-subtle); padding-top: 16px; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 12px; color: var(--text-muted);">Database Name: <code>knee_monitor.db</code> (SQLite 3.x WASM)</span>
+          <button class="btn btn-sm btn-outline text-danger" onclick="if(confirm('Warning: This will wipe all recorded sessions and readings from your browser storage. Proceed?')) window.kneeDatabase.clearAllData().then(() => { alert('Database wiped.'); window.kneeHistory.loadHistory(); })">
+            Clear Database
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: CLINICAL BODY TEMPERATURE ENTRY                   -->
+  <!-- ======================================================== -->
+  <div id="modal-body-temp" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Log Clinical Body Temperature</h3>
+        <button class="modal-close" onclick="document.getElementById('modal-body-temp').classList.remove('active')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
+          Enter the temperature measured with a clinical oral or tympanic thermometer. This entry is stored in the <code>body_temperature_entries</code> SQLite table and associated with the current monitoring session.
+        </p>
+        <div class="form-group">
+          <label class="form-label">Body Temperature (°C)</label>
+          <input type="number" id="input-body-temp" class="form-control" step="0.1" min="30.0" max="44.0" placeholder="e.g. 36.8" value="36.8">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Clinical Notes / Context</label>
+          <input type="text" id="input-body-temp-notes" class="form-control" placeholder="e.g. Post-exercise, morning baseline, oral thermometer">
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;">
+          <button class="btn btn-outline" onclick="document.getElementById('modal-body-temp').classList.remove('active')">Cancel</button>
+          <button id="btn-save-body-temp" class="btn btn-primary">Save to SQLite</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: SESSION DETAIL INSPECTOR                          -->
+  <!-- ======================================================== -->
+  <div id="modal-session-detail" class="modal-overlay">
+    <div class="modal-box" style="max-width: 750px;">
+      <div class="modal-header">
+        <h3 id="modal-detail-title" class="modal-title">Session Detail</h3>
+        <button class="modal-close" onclick="document.getElementById('modal-session-detail').classList.remove('active')">&times;</button>
+      </div>
+      <div id="modal-detail-content" class="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Toast Notification System -->
+  <div id="toast-container"></div>
+
+  <!-- Application Modules (Relative paths for GitHub Pages subfolder compatibility) -->
+  <script src="js/database.js"></script>
+  <script src="js/ble.js"></script>
+  <script src="js/sensors.js"></script>
+  <script src="js/calibration.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/knee3d.js"></script>
+  <script src="js/history.js"></script>
+  <script src="js/export.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
